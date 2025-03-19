@@ -13,7 +13,7 @@ def fetch_news(query, api_key, language='en', max_results=10):
         data = response.json()
         articles = pd.DataFrame(data.get('articles', []))
         
-        # Remove duplicates based only on description (keeping articles with unique content)
+        # Remove duplicates based only on description
         if not articles.empty:
             articles = articles.drop_duplicates(subset=['description'])
 
@@ -49,61 +49,65 @@ def plot_sentiment_over_time(df, date_column, title):
     df[date_column] = pd.to_datetime(df[date_column])
     df = df.sort_values(date_column)
     fig = px.line(df, x=date_column, y='sentiment', title=title, markers=True)
-    st.plotly_chart(fig)
+    st.plotly_chart(fig, use_container_width=True)  # Full-width plot
 
 # Streamlit UI
+st.set_page_config(layout="wide")  # 🖥️ Full-screen mode
 st.title('📊 Financial News & Twitter Sentiment Analysis')
 
 # Retrieve API keys from Streamlit secrets
-news_api_key = st.secrets["GNEWS_API_KEY"]
-twitter_api_key = st.secrets["TWITTER_BEARER_TOKEN"]
+news_api_key = st.secrets.get("GNEWS_API_KEY")
+twitter_api_key = st.secrets.get("TWITTER_BEARER_TOKEN")
+
+if not news_api_key or not twitter_api_key:
+    st.error("🚨 API Keys are missing! Please add them in Streamlit Cloud settings.")
+    st.stop()
 
 # User input for query
 query = st.text_input('Enter search term:', 'stock market')
 
-### FETCH & ANALYZE NEWS ###
-if st.button('Fetch and Analyze News'):
-    with st.spinner('Fetching news articles...'):
-        news_df = fetch_news(query, news_api_key)
-        if not news_df.empty:
-            news_df['sentiment'] = news_df['description'].apply(lambda x: analyze_sentiment(x) if isinstance(x, str) else 0)
-            st.success('News articles fetched and analyzed successfully!')
-            st.write("### News Articles with Sentiment Scores")
-            st.dataframe(news_df[['title', 'description', 'sentiment', 'url']])
+# Layout: Side-by-Side Comparison
+col1, col2 = st.columns(2)
 
-            # Show sentiment trend over time
-            plot_sentiment_over_time(news_df, 'publishedAt', 'Sentiment Over Time (News)')
+with col1:
+    st.subheader("📰 News Analysis")
+    if st.button('Fetch News'):
+        with st.spinner('Fetching news articles...'):
+            news_df = fetch_news(query, news_api_key)
+            if not news_df.empty:
+                news_df['sentiment'] = news_df['description'].apply(lambda x: analyze_sentiment(x) if isinstance(x, str) else 0)
+                st.success('News articles fetched and analyzed successfully!')
+                st.write("### News Articles with Sentiment Scores")
+                st.dataframe(news_df[['title', 'description', 'sentiment', 'url']])
 
-            # Show links to articles
-            st.write("### Read Full Articles:")
-            for index, row in news_df.iterrows():
-                st.markdown(f"- [{row['title']}]({row['url']}) - **Sentiment Score:** {row['sentiment']:.2f}")
+                # Show sentiment trend over time
+                plot_sentiment_over_time(news_df, 'publishedAt', 'Sentiment Over Time (News)')
 
-            # Show sentiment analysis summary
-            st.write("### Sentiment Analysis Results (News):")
-            st.write(f"Average Sentiment Score: {news_df['sentiment'].mean():.2f}")
-            st.write(f"Positive Sentiment Percentage: {(news_df['sentiment'] > 0).mean() * 100:.2f}%")
+                # Show sentiment analysis summary
+                st.write("### Sentiment Analysis Results (News):")
+                st.write(f"Average Sentiment Score: {news_df['sentiment'].mean():.2f}")
+                st.write(f"Positive Sentiment Percentage: {(news_df['sentiment'] > 0).mean() * 100:.2f}%")
+            else:
+                st.warning('No news articles found for the given query.')
 
-        else:
-            st.warning('No news articles found for the given query.')
+with col2:
+    st.subheader("🐦 Twitter Analysis")
+    if st.button('Fetch Tweets'):
+        with st.spinner('Fetching tweets...'):
+            tweets_df = fetch_tweets(query, twitter_api_key)
+            if not tweets_df.empty:
+                tweets_df['sentiment'] = tweets_df['text'].apply(lambda x: analyze_sentiment(x))
+                st.success('Tweets fetched and analyzed successfully!')
+                st.write("### Recent Tweets with Sentiment Scores")
+                st.dataframe(tweets_df)
 
-### FETCH & ANALYZE TWEETS ###
-if st.button('Fetch and Analyze Tweets'):
-    with st.spinner('Fetching tweets...'):
-        tweets_df = fetch_tweets(query, twitter_api_key)
-        
-        if not tweets_df.empty:
-            tweets_df['sentiment'] = tweets_df['text'].apply(lambda x: analyze_sentiment(x))
-            st.success('Tweets fetched and analyzed successfully!')
-            st.write("### Recent Tweets with Sentiment Scores")
-            st.dataframe(tweets_df)
+                # Show sentiment trend over time
+                plot_sentiment_over_time(tweets_df, 'date', 'Sentiment Over Time (Twitter)')
 
-            # Show sentiment trend over time
-            plot_sentiment_over_time(tweets_df, 'date', 'Sentiment Over Time (Twitter)')
+                # Show sentiment analysis summary
+                st.write("### Sentiment Analysis Results (Twitter):")
+                st.write(f"Average Sentiment Score: {tweets_df['sentiment'].mean():.2f}")
+                st.write(f"Positive Sentiment Percentage: {(tweets_df['sentiment'] > 0).mean() * 100:.2f}%")
+            else:
+                st.warning('No tweets found for the given query.')
 
-            # Show sentiment analysis summary
-            st.write("### Sentiment Analysis Results (Twitter):")
-            st.write(f"Average Sentiment Score: {tweets_df['sentiment'].mean():.2f}")
-            st.write(f"Positive Sentiment Percentage: {(tweets_df['sentiment'] > 0).mean() * 100:.2f}%")
-        else:
-            st.warning('No tweets found for the given query.')
