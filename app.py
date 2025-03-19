@@ -35,7 +35,7 @@ st.title('📊 Financial News Sentiment Analysis')
 
 # User input for query and API key
 query = st.text_input('Enter search term:', 'stock market')
-api_key = st.text_input('Enter GNews API key:', type="password")
+api_key = st.secrets["GNEWS_API_KEY"]
 
 if st.button('Fetch and Analyze News'):
     with st.spinner('Fetching news articles...'):
