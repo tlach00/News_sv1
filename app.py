@@ -4,5 +4,4 @@ st.title("📊 News-Based Financial Sentiment Analysis")
 
 st.write("Welcome to the financial sentiment analysis app! 🚀")
 
-streamlit run app.py
 
