@@ -22,18 +22,26 @@ def fetch_news(query, api_key, language='en', max_results=10):
         return pd.DataFrame()  # Return empty DataFrame if request fails
 
 # Function to fetch tweets from Twitter API
+import time
+
 def fetch_tweets(query, api_key, max_tweets=10):
     client = tweepy.Client(bearer_token=api_key)
 
     try:
         tweets = client.search_recent_tweets(query=query, tweet_fields=["created_at", "text"], max_results=max_tweets)
+        
         if tweets.data:
+            time.sleep(5)  # ✅ Add a delay to avoid hitting rate limits
             return pd.DataFrame([{"date": tweet.created_at, "text": tweet.text} for tweet in tweets.data])
         else:
-            return pd.DataFrame()  # Return empty DataFrame if no tweets found
+            return pd.DataFrame()
+    except tweepy.TooManyRequests:
+        st.error("🚨 Too many requests! Please wait a few minutes before trying again.")
+        return pd.DataFrame()
     except Exception as e:
         st.error(f"Error fetching tweets: {e}")
         return pd.DataFrame()
+
 
 # Function to perform sentiment analysis
 def analyze_sentiment(text):
