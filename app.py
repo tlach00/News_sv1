@@ -10,9 +10,16 @@ def fetch_news(query, api_key, language='en', max_results=10):
     response = requests.get(url)
     if response.status_code == 200:
         data = response.json()
-        return pd.DataFrame(data.get('articles', []))
+        articles = pd.DataFrame(data.get('articles', []))
+        
+        # Remove duplicates based only on description (keeping articles with unique content)
+        if not articles.empty:
+            articles = articles.drop_duplicates(subset=['description'])
+
+        return articles
     else:
         return pd.DataFrame()  # Return empty DataFrame if request fails
+
 
 # Function to perform sentiment analysis
 def analyze_sentiment(text):
