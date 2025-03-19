@@ -33,9 +33,11 @@ def plot_sentiment_over_time(df):
 # Streamlit UI
 st.title('📊 Financial News Sentiment Analysis')
 
-# User input for query and API key
-query = st.text_input('Enter search term:', 'stock market')
+# Retrieve API key from Streamlit secrets
 api_key = st.secrets["GNEWS_API_KEY"]
+
+# User input for query
+query = st.text_input('Enter search term:', 'stock market')
 
 if st.button('Fetch and Analyze News'):
     with st.spinner('Fetching news articles...'):
@@ -53,11 +55,11 @@ if st.button('Fetch and Analyze News'):
             st.write("### Read Full Articles:")
             for index, row in news_df.iterrows():
                 st.markdown(f"- [{row['title']}]({row['url']}) - **Sentiment Score:** {row['sentiment']:.2f}")
+
+            # Show sentiment analysis summary
+            st.write("### Sentiment Analysis Results:")
+            st.write(f"Average Sentiment Score: {news_df['sentiment'].mean():.2f}")
+            st.write(f"Positive Sentiment Percentage: {(news_df['sentiment'] > 0).mean() * 100:.2f}%")
+
         else:
             st.warning('No news articles found for the given query.')
-
-    # Show sentiment analysis results
-    if not news_df.empty:
-        st.write("### Sentiment Analysis Results:")
-        st.write(f"Average Sentiment Score: {news_df['sentiment'].mean():.2f}")
-        st.write(f"Positive Sentiment Percentage: {(news_df['sentiment'] > 0).mean() * 100:.2f}%")§
