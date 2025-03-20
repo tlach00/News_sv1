@@ -4,17 +4,23 @@ import requests
 import pandas as pd
 import plotly.express as px
 from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
+from datetime import datetime, timedelta
 
 # Load Finnhub API Key from Streamlit secrets
 finnhub_api_key = st.secrets["finnhub"]["api_key"]
 
 # Function to fetch news from Finnhub API
 def fetch_finnhub_news(category=None, query=None):
+    today = datetime.today()
+    last_week = today - timedelta(days=7)
+    from_date = last_week.strftime("%Y-%m-%d")
+    to_date = today.strftime("%Y-%m-%d")
+
     if query:
-        url = f"https://finnhub.io/api/v1/company-news?symbol={query.upper()}&token={finnhub_api_key}"
+        url = f"https://finnhub.io/api/v1/company-news?symbol={query.upper()}&from={from_date}&to={to_date}&token={finnhub_api_key}"
     else:
         url = f"https://finnhub.io/api/v1/news?category={category}&token={finnhub_api_key}"
-
+    
     response = requests.get(url)
     st.write(f"🔎 **Finnhub API URL:** {url}")  # Debugging output
     st.write(f"📡 **API Response Status Code:** {response.status_code}")  # Debugging output
@@ -27,7 +33,6 @@ def fetch_finnhub_news(category=None, query=None):
             news_df = pd.DataFrame(news_data)
             return news_df
     return pd.DataFrame()
-
 
 # Function to perform sentiment analysis
 def analyze_sentiment(text):
@@ -53,35 +58,16 @@ st.title('📊 Financial News Sentiment Analysis (Powered by Finnhub)')
 # 🚀 Add Search Bar for Custom Query
 query = st.text_input("🔍 Search for news (stocks, personalities, companies, events):")
 
-# 🔹 Category Buttons
+# 🔹 Category Buttons (Avoid Double Clicking Issues)
 st.write("### Choose a Category:")
-col1, col2, col3, col4 = st.columns(4)
 categories = {
-    "general": "📢 General",
+    "general": "📢 General News",
     "forex": "💱 Forex",
     "crypto": "🪙 Crypto",
     "merger": "📈 Mergers & Acquisitions"
 }
 
-# Define a session state to track selected category
-if "selected_category" not in st.session_state:
-    st.session_state["selected_category"] = None
-
-with col1:
-    if st.button("📢 General News"):
-        st.session_state["selected_category"] = "general"
-with col2:
-    if st.button("💱 Forex"):
-        st.session_state["selected_category"] = "forex"
-with col3:
-    if st.button("🪙 Crypto"):
-        st.session_state["selected_category"] = "crypto"
-with col4:
-    if st.button("📈 M&A"):
-        st.session_state["selected_category"] = "merger"
-
-# ✅ Determine category or search query
-selected_category = st.session_state["selected_category"]
+selected_category = st.radio("Select a category:", list(categories.keys()), format_func=lambda x: categories[x])
 
 # 🚀 Fetch & Analyze Button
 if st.button("Fetch & Analyze News"):
@@ -112,4 +98,3 @@ if st.button("Fetch & Analyze News"):
             st.write(f"Positive Sentiment Percentage: {(news_df['sentiment'] > 0).mean() * 100:.2f}%")
         else:
             st.warning("No news articles found for the selected category or search query.")
-
