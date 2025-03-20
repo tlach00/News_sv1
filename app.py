@@ -9,17 +9,20 @@ from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 finnhub_api_key = st.secrets["finnhub"]["api_key"]
 
 # Function to fetch news from Finnhub API
-def fetch_finnhub_news(category="general"):
-    url = f"https://finnhub.io/api/v1/news?category={category}&token={finnhub_api_key}"
-    response = requests.get(url)
+def fetch_finnhub_news(category=None, query=None):
+    if query:
+        url = f"https://finnhub.io/api/v1/news?category=general&token={finnhub_api_key}"  # General news as a fallback
+        url = f"https://finnhub.io/api/v1/company-news?symbol={query.upper()}&token={finnhub_api_key}"  # Stock-based search
+    else:
+        url = f"https://finnhub.io/api/v1/news?category={category}&token={finnhub_api_key}"
     
+    response = requests.get(url)
     if response.status_code == 200:
         news_data = response.json()
         if isinstance(news_data, list) and len(news_data) > 0:
-            # Convert to DataFrame for easier processing
             news_df = pd.DataFrame(news_data)
             return news_df
-    return pd.DataFrame()  # Return empty DataFrame if no news found
+    return pd.DataFrame()
 
 # Function to perform sentiment analysis
 def analyze_sentiment(text):
@@ -42,22 +45,48 @@ def plot_sentiment_over_time(df):
 # 📌 Streamlit UI
 st.title('📊 Financial News Sentiment Analysis (Powered by Finnhub)')
 
-# News Category Selection
-category_options = {
+# 🚀 Add Search Bar for Custom Query
+query = st.text_input("🔍 Search for news (stocks, personalities, companies, events):")
+
+# 🔹 Category Buttons
+st.write("### Choose a Category:")
+col1, col2, col3, col4 = st.columns(4)
+categories = {
     "general": "📢 General",
     "forex": "💱 Forex",
     "crypto": "🪙 Crypto",
     "merger": "📈 Mergers & Acquisitions"
 }
-category = st.selectbox("Select News Category", list(category_options.keys()), format_func=lambda x: category_options[x])
 
-# Fetch & Analyze Button
+# Define a session state to track selected category
+if "selected_category" not in st.session_state:
+    st.session_state["selected_category"] = None
+
+with col1:
+    if st.button("📢 General News"):
+        st.session_state["selected_category"] = "general"
+with col2:
+    if st.button("💱 Forex"):
+        st.session_state["selected_category"] = "forex"
+with col3:
+    if st.button("🪙 Crypto"):
+        st.session_state["selected_category"] = "crypto"
+with col4:
+    if st.button("📈 M&A"):
+        st.session_state["selected_category"] = "merger"
+
+# ✅ Determine category or search query
+selected_category = st.session_state["selected_category"]
+
+# 🚀 Fetch & Analyze Button
 if st.button("Fetch & Analyze News"):
     with st.spinner("Fetching news articles..."):
-        news_df = fetch_finnhub_news(category)
-        
+        if query:
+            news_df = fetch_finnhub_news(query=query)
+        else:
+            news_df = fetch_finnhub_news(category=selected_category)
+
         if not news_df.empty:
-            # Apply sentiment analysis
             news_df['sentiment'] = news_df['headline'].apply(lambda x: analyze_sentiment(x) if isinstance(x, str) else 0)
 
             st.success('News articles fetched and analyzed successfully!')
@@ -77,4 +106,5 @@ if st.button("Fetch & Analyze News"):
             st.write(f"Average Sentiment Score: {news_df['sentiment'].mean():.2f}")
             st.write(f"Positive Sentiment Percentage: {(news_df['sentiment'] > 0).mean() * 100:.2f}%")
         else:
-            st.warning("No news articles found for the selected category.")
+            st.warning("No news articles found for the selected category or search query.")
+
