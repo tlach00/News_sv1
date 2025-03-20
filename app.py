@@ -11,18 +11,23 @@ finnhub_api_key = st.secrets["finnhub"]["api_key"]
 # Function to fetch news from Finnhub API
 def fetch_finnhub_news(category=None, query=None):
     if query:
-        url = f"https://finnhub.io/api/v1/news?category=general&token={finnhub_api_key}"  # General news as a fallback
-        url = f"https://finnhub.io/api/v1/company-news?symbol={query.upper()}&token={finnhub_api_key}"  # Stock-based search
+        url = f"https://finnhub.io/api/v1/company-news?symbol={query.upper()}&token={finnhub_api_key}"
     else:
         url = f"https://finnhub.io/api/v1/news?category={category}&token={finnhub_api_key}"
-    
+
     response = requests.get(url)
+    st.write(f"🔎 **Finnhub API URL:** {url}")  # Debugging output
+    st.write(f"📡 **API Response Status Code:** {response.status_code}")  # Debugging output
+    
     if response.status_code == 200:
         news_data = response.json()
+        st.write(f"📄 **API Response:** {news_data[:3]}")  # Show first 3 news articles for debugging
+        
         if isinstance(news_data, list) and len(news_data) > 0:
             news_df = pd.DataFrame(news_data)
             return news_df
     return pd.DataFrame()
+
 
 # Function to perform sentiment analysis
 def analyze_sentiment(text):
