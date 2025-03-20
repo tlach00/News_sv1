@@ -1,100 +1,99 @@
-# 📌 Place this in `app.py`
 import streamlit as st
 import requests
 import pandas as pd
 import plotly.express as px
 from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
-from datetime import datetime, timedelta
-
-# Load Finnhub API Key from Streamlit secrets
-finnhub_api_key = st.secrets["finnhub"]["api_key"]
+from collections import Counter
+import datetime
 
 # Function to fetch news from Finnhub API
-def fetch_finnhub_news(category=None, query=None):
-    today = datetime.today()
-    last_week = today - timedelta(days=7)
-    from_date = last_week.strftime("%Y-%m-%d")
-    to_date = today.strftime("%Y-%m-%d")
-
+def fetch_news(category, query, api_key):
     if query:
-        url = f"https://finnhub.io/api/v1/company-news?symbol={query.upper()}&from={from_date}&to={to_date}&token={finnhub_api_key}"
+        url = f"https://finnhub.io/api/v1/company-news?symbol={query}&from=2025-03-13&to=2025-03-20&token={api_key}"
     else:
-        url = f"https://finnhub.io/api/v1/news?category={category}&token={finnhub_api_key}"
+        url = f"https://finnhub.io/api/v1/news?category={category}&token={api_key}"
     
     response = requests.get(url)
-    st.write(f"🔎 **Finnhub API URL:** {url}")  # Debugging output
-    st.write(f"📡 **API Response Status Code:** {response.status_code}")  # Debugging output
-    
     if response.status_code == 200:
-        news_data = response.json()
-        st.write(f"📄 **API Response:** {news_data[:3]}")  # Show first 3 news articles for debugging
-        
-        if isinstance(news_data, list) and len(news_data) > 0:
-            news_df = pd.DataFrame(news_data)
-            return news_df
-    return pd.DataFrame()
+        return response.json()
+    return []
 
 # Function to perform sentiment analysis
 def analyze_sentiment(text):
     analyzer = SentimentIntensityAnalyzer()
-    sentiment = analyzer.polarity_scores(text)
-    return sentiment['compound']
+    return analyzer.polarity_scores(text)['compound']
 
-# Function to visualize sentiment over time
-def plot_sentiment_over_time(df):
-    if 'datetime' not in df or df.empty:
-        st.warning("No news data available to plot.")
-        return
-    
+# Function to extract most mentioned companies/tickers
+def extract_top_mentions(news_data):
+    all_words = []
+    for article in news_data:
+        all_words.extend(article['headline'].split())
+    return Counter(all_words).most_common(5)  # Top 5 most frequent words
+
+# Function to format and filter news
+def process_news(news_data):
+    df = pd.DataFrame(news_data)
+    if df.empty:
+        return df
+    df['sentiment'] = df['headline'].apply(lambda x: analyze_sentiment(x))
+    df = df.drop_duplicates(subset=['headline'])
     df['datetime'] = pd.to_datetime(df['datetime'], unit='s')
-    df = df.sort_values('datetime')
-    
-    fig = px.line(df, x='datetime', y='sentiment', title='Sentiment Over Time', markers=True)
-    st.plotly_chart(fig)
+    return df
 
-# 📌 Streamlit UI
-st.title('📊 Financial News Sentiment Analysis (Powered by Finnhub)')
+# Streamlit UI Setup
+st.set_page_config(layout="wide")
+st.title('📈 Financial News Sentiment Analysis (Powered by Finnhub)')
 
-# 🚀 Add Search Bar for Custom Query
-query = st.text_input("🔍 Search for news (stocks, personalities, companies, events):")
+# API Key Setup
+api_key = st.secrets["FINNHUB_API_KEY"]
 
-# 🔹 Category Buttons (Avoid Double Clicking Issues)
-st.write("### Choose a Category:")
+# Search Bar
+query = st.text_input("🔍 Search for news (stocks, personalities, companies, events):", "")
+
+# Categories Selection
 categories = {
-    "general": "📢 General News",
-    "forex": "💱 Forex",
-    "crypto": "🪙 Crypto",
-    "merger": "📈 Mergers & Acquisitions"
+    "general": "General News",
+    "forex": "Forex",
+    "crypto": "Crypto",
+    "mergers": "Mergers & Acquisitions"
 }
-
 selected_category = st.radio("Select a category:", list(categories.keys()), format_func=lambda x: categories[x])
 
-# 🚀 Fetch & Analyze Button
+# Fetch and analyze news button
 if st.button("Fetch & Analyze News"):
-    with st.spinner("Fetching news articles..."):
-        if query:
-            news_df = fetch_finnhub_news(query=query)
-        else:
-            news_df = fetch_finnhub_news(category=selected_category)
-
-        if not news_df.empty:
-            news_df['sentiment'] = news_df['headline'].apply(lambda x: analyze_sentiment(x) if isinstance(x, str) else 0)
-
-            st.success('News articles fetched and analyzed successfully!')
-            st.write("### News Articles with Sentiment Scores")
-            st.dataframe(news_df[['headline', 'summary', 'sentiment', 'source']])
-
-            # Sentiment Trend
-            plot_sentiment_over_time(news_df)
-
-            # Show links to full articles
-            st.write("### Read Full Articles:")
-            for index, row in news_df.iterrows():
+    news_data = fetch_news(selected_category, query, api_key)
+    if news_data:
+        df = process_news(news_data)
+        
+        # Sentiment Overview
+        avg_sentiment = df['sentiment'].mean()
+        sentiment_counts = df['sentiment'].apply(lambda x: "Positive" if x > 0 else ("Negative" if x < 0 else "Neutral")).value_counts()
+        st.subheader("📊 Sentiment Analysis")
+        st.write(f"**Average Sentiment Score:** {avg_sentiment:.2f}")
+        st.bar_chart(sentiment_counts)
+        
+        # Sentiment Trend Over Time
+        st.subheader("📈 Sentiment Trend Over Time")
+        fig = px.line(df, x='datetime', y='sentiment', title='Sentiment Trend')
+        st.plotly_chart(fig)
+        
+        # News Volume & Impact
+        st.subheader("📰 News Volume Over Time")
+        df_count = df.groupby(df['datetime'].dt.date).size()
+        st.bar_chart(df_count)
+        
+        # Most Mentioned Topics
+        st.subheader("🔥 Most Mentioned Topics")
+        top_mentions = extract_top_mentions(news_data)
+        st.write(pd.DataFrame(top_mentions, columns=["Word", "Count"]))
+        
+        # Display News Articles (Show First 10, Expandable)
+        st.subheader("🗞️ Top News Articles")
+        for i, row in df.head(10).iterrows():
+            st.markdown(f"- [{row['headline']}]({row['url']}) - **Sentiment Score:** {row['sentiment']:.2f}")
+        with st.expander("🔽 See More Articles"):
+            for i, row in df.iloc[10:].iterrows():
                 st.markdown(f"- [{row['headline']}]({row['url']}) - **Sentiment Score:** {row['sentiment']:.2f}")
+    else:
+        st.warning("No news articles found for the selected category or search query.")
 
-            # Sentiment Summary
-            st.write("### Sentiment Analysis Results:")
-            st.write(f"Average Sentiment Score: {news_df['sentiment'].mean():.2f}")
-            st.write(f"Positive Sentiment Percentage: {(news_df['sentiment'] > 0).mean() * 100:.2f}%")
-        else:
-            st.warning("No news articles found for the selected category or search query.")
